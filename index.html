@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Oracle Policy Modeling Viewer - JavaScript Version</title>
+
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f8f7f5;
+        background-image: url("data:image/svg+xml,%3Csvg width='1440' height='320' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill='%23d8cfc8' fill-opacity='0.25' d='M0,160L48,144C96,128,192,96,288,117.3C384,139,480,213,576,208C672,203,768,117,864,112C960,107,1056,181,1152,213.3C1248,245,1344,235,1392,229.3L1440,224L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z'%3E%3C/path%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-size: cover;
+        min-height: 100vh;
+        padding: 2rem;
+        margin: 0;
+        overflow: hidden;
+      }
+
+      #canvasContainer {
+      
+        margin: 0 auto;
+        background: #fff;
+        border: 0px solid #ccc;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 0px 0px rgba(0, 0, 0, 0.1);
+        display: block;
+      }
+
+      /* Centers the toolbar above the diagram */
+      .toolbar-container {
+        width: 1200px;
+        margin: 0 auto 1rem auto;
+        display: flex;
+        justify-content: center;
+      }
+
+      .toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        background: #fff;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        padding: 8px 16px;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+      }
+
+      /* Hide the default file input button entirely */
+      #fileInput {
+        display: none;
+      }
+
+      /* Style the label to look like a button */
+      .file-button {
+        background: #3c64a0;
+        color: #fff;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: background 0.2s ease;
+      }
+
+      .file-button:hover {
+        background: #2a4d85;
+      }
+
+      .toolbar span {
+        font-size: 14px;
+        color: #444;
+      }
+
+      /* Wrapper for diagram + zoom */
+      #canvasWrapper {
+        position: relative;
+        width: 1750px;
+        height: 740px;
+        margin: 0 auto;
+        background: #fff;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+      }
+
+      /* Zoom control canvas (docked top-right) */
+      #zoomCanvas {
+        position: absolute;
+        right: 10px;
+        top: 10px;
+        width: 70px;
+        height: 250px;
+        border: none;
+        background: transparent;
+      }
+
+      /* Status overlay */
+      #statusOverlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        background: rgba(255, 255, 255, 0.8);
+        text-align: center;
+        padding: 10px 0;
+        font-size: 14px;
+        color: #333;
+        display: none;
+        z-index: 100;
+      }
+
+      #statusBar {
+        width: 60%;
+        height: 8px;
+        background: #eee;
+        border-radius: 4px;
+        margin: 8px auto 0 auto;
+      }
+
+      #statusFill {
+        height: 8px;
+        width: 0%;
+        background: #3c64a0;
+        border-radius: 4px;
+        transition: width 0.3s;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h1 style="text-align: center; color: #3c64a0">
+      Oracle Policy Modeling Project Viewer - JavaScript Version
+    </h1>
+
+    <div class="toolbar-container">
+      <div class="toolbar">
+        <label for="fileInput" class="file-button">Choose File</label>
+        <input id="fileInput" type="file" accept=".zip,.xml,.json" />
+        <span id="fileName">No file chosen</span>
+
+  <label for="layoutSelect" style="margin-right: 8px;">Layout:</label>
+  <select id="layoutSelect" style="padding:6px; border-radius:6px;">
+    <option value="TreeLayout" selected>TreeLayout</option>
+    <option value="LayeredLayout">LayeredLayout</option>
+    <option value="SpringLayout">SpringLayout</option>
+    <option value="BorderedTreeLayout">BorderedTreeLayout</option>
+    <option value="TreeMapLayout">TreeMapLayout</option>
+    <option value="FractalLayout">FractalLayout</option>
+    <option value="FlowchartLayout">FlowchartLayout</option>
+    <option value="TopologicalLayout">TopologicalLayout</option>
+    <option value="OrthogonalLayout">OrthogonalLayout</option>
+    <option value="RadialTreeLayout">RadialTreeLayout</option>
+    <option value="GridLayout">GridLayout</option>
+  </select>
+  <button id="applyLayoutBtn" style="margin-left:8px;padding:6px 12px;">Apply</button>
+
+  <label for="pdfPageSize" style="margin-right: 8px;">PDF Size:</label>
+  <select id="pdfPageSize" style="padding:6px; border-radius:6px;">
+    <option value="a4" selected>A4</option>
+    <option value="a3">A3</option>
+    <option value="a2">A2</option>
+    <option value="a1">A1</option>
+    <option value="a0">A0</option>
+  </select>
+  <button id="exportPdfBtn" style="margin-left:8px;padding:6px 12px;">Download PDF</button>
+</div>
+   </div>
+    <div id="canvasWrapper">
+      <canvas id="canvasContainer"></canvas>
+      <canvas id="zoomCanvas"></canvas>
+
+      <div id="statusOverlay">
+        <div id="statusText">Preparing...</div>
+        <div id="statusBar"><div id="statusFill"></div></div>
+      </div>
+    </div>
+
+    <div class="footer" style="text-align: center; margin-top: 20px">
+      <a id="mindfusionLink" href="https://mindfusion.dev/">MindFusion</a>
+    </div>
+
+    <!-- === JavaScript includes === -->
+
+    <!-- Core libraries -->
+    <script src="libs/jszip.min.js"></script>
+    <script src="libs/MindFusion.Diagramming.js"></script>
+
+    <!-- Parser scripts (global functions) -->
+    <script src="parsers/xml.js"></script>
+    <script src="parsers/opmParser.js"></script>
+    <script src="parsers/enumParser.js"></script>
+    <script src="parsers/refParser.js"></script>
+
+    <!-- Main app logic -->
+<script src="diagramRenderer.js"></script>
+<script src="app.js"></script>
+<!-- PDF export dependencies -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  </body>
+</html>
