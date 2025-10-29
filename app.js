@@ -1,3 +1,7 @@
+// app.js – Main controller for OPM Viewer (pure JS version)
+// Developer Console + progress bar + full-diagram printing.
+// Includes real fix for zoom blur by watching zoomFactor.
+
 var diagram, diagramView;
 
 document.addEventListener("DOMContentLoaded", function () {
@@ -13,15 +17,52 @@ document.addEventListener("DOMContentLoaded", function () {
   var LayeredLayout = Graphs.LayeredLayout;
 
   // === Canvas setup ===
-  var canvas = document.getElementById("canvasContainer");
-  const VIEW_WIDTH = 1200;
-  const VIEW_HEIGHT = 740;
-  canvas.width = VIEW_WIDTH;
-  canvas.height = VIEW_HEIGHT;
-
+  const canvas = document.getElementById("canvasContainer");
   diagramView = DiagramView.create(canvas);
   diagram = diagramView.diagram;
   diagramView.behavior = MindFusion.Diagramming.Behavior.MoveNodes;
+
+  // --- Real fix for zoom blur ---
+  (function watchZoomChanges() {
+    let lastZoom = diagramView.zoomFactor;
+    function tick() {
+      const currentZoom = diagramView.zoomFactor;
+      if (currentZoom !== lastZoom) {
+        lastZoom = currentZoom;
+        diagram.repaint();
+      }
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  })();
+
+  // --- Dynamic crisp resizing (no CSS stretch) ---
+  function resizeDiagramCanvas() {
+    const zoomWidth = 100; // reserve horizontal space for zoom control
+    const consoleHeight = 120; // reserve vertical space for debug console
+    const deviceRatio = window.devicePixelRatio || 1;
+
+    const wrapper = document.getElementById("canvasWrapper");
+    const wrapperRect = wrapper.getBoundingClientRect();
+
+    const newWidth = wrapperRect.width - zoomWidth;
+    const newHeight = window.innerHeight - consoleHeight - wrapperRect.top - 20;
+
+    // Set both internal buffer size and CSS size (avoid blur)
+    canvas.width = newWidth * deviceRatio;
+    canvas.height = newHeight * deviceRatio;
+    canvas.style.width = newWidth + "px";
+    canvas.style.height = newHeight + "px";
+
+    // Keep zoom proportional on HiDPI screens
+    diagramView.zoomFactor = 100 * deviceRatio;
+
+    // Redraw / arrange as needed
+    diagram.resizeToFitItems(20, false, true);
+  }
+
+  window.addEventListener("resize", resizeDiagramCanvas);
+  resizeDiagramCanvas();
 
   // === Zoom Control ===
   const zoomCanvas = document.getElementById("zoomCanvas");
@@ -84,53 +125,34 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  // === PDF Export ===
+  // === PDF Export (print full diagram) ===
   const exportPdfBtn = document.getElementById("exportPdfBtn");
-  const pdfPageSize = document.getElementById("pdfPageSize");
 
-  if (exportPdfBtn && pdfPageSize) {
-    exportPdfBtn.addEventListener("click", async () => {
-      const { jsPDF } = window.jspdf;
-      const format = pdfPageSize.value || "a4";
-
-      const canvasWrapper = document.getElementById("canvasWrapper") || document.body;
-      const exportArea = document.getElementById("canvasContainer");
-
+  if (exportPdfBtn) {
+    exportPdfBtn.addEventListener("click", () => {
       try {
-        const canvasImage = await html2canvas(exportArea, {
-          scale: 2,
-          backgroundColor: "#ffffff",
-          useCORS: true
+        // --- Ensure the diagram fits all items ---
+        diagram.resizeToFitItems(20, false, true);
+
+        const wrapper = document.getElementById("canvasWrapper");
+        const mywidth = wrapper.offsetWidth;
+        const myheight = wrapper.offsetHeight;
+
+        // --- Use MindFusion's built-in print (full diagram) ---
+        diagramView.print({
+          printArea: diagram.getContentBounds(),
+          pageSize: { width: mywidth, height: myheight },
+          scaleMode: "FitToPage",
+          background: true,
+          title: "OPM Viewer Export"
         });
 
-        const imgData = canvasImage.toDataURL("image/png");
-        const pdf = new jsPDF({
-          orientation: "landscape",
-          unit: "mm",
-          format
-        });
-
-        const pageWidth = pdf.internal.pageSize.getWidth();
-        const pageHeight = pdf.internal.pageSize.getHeight();
-
-        const pxToMm = (px) => px * 0.264583;
-        const imgWidth = pxToMm(canvasImage.width);
-        const imgHeight = pxToMm(canvasImage.height);
-
-        const ratio = Math.min(pageWidth / imgWidth, pageHeight / imgHeight, 1);
-        const renderWidth = imgWidth * ratio;
-        const renderHeight = imgHeight * ratio;
-
-        const x = (pageWidth - renderWidth) / 2;
-        const y = (pageHeight - renderHeight) / 2;
-
-        pdf.addImage(imgData, "PNG", x, y, renderWidth, renderHeight);
-        const filename = `OPM_Export_${format.toUpperCase()}.pdf`;
-        pdf.save(filename);
-        console.log(`✅ PDF exported: ${filename}`);
+        console.log(
+          "🖨️ Print preview opened. Use 'Save as PDF' to export the full diagram."
+        );
       } catch (err) {
         console.error("❌ PDF export failed:", err);
-        alert("PDF export failed. Check console for details.");
+        alert("Unable to print or export. Check console for details.");
       }
     });
   }
@@ -142,37 +164,70 @@ async function handleZipFile(file) {
   showStatusBar();
 
   const worker = new Worker("worker.js");
+
+  // === Developer Console elements (optional, harmless if absent) ===
+  const consoleBox = document.getElementById("consoleContent");
+  const clearBtn = document.getElementById("clearConsoleBtn");
+
+  function appendStatusLine(text) {
+    if (!consoleBox) return;
+    const line = document.createElement("div");
+    line.textContent = text;
+    consoleBox.appendChild(line);
+    while (consoleBox.children.length > 80) {
+      consoleBox.removeChild(consoleBox.firstChild);
+    }
+    consoleBox.parentElement.scrollTop = consoleBox.parentElement.scrollHeight;
+  }
+
+  if (clearBtn) {
+    clearBtn.addEventListener("click", () => {
+      consoleBox.innerHTML = "";
+    });
+  }
+
+  // --- Unified worker message handler (no invented API) ---
   worker.onmessage = (e) => {
-    if (e.data.type === "progress") {
-      updateStatusBar(e.data.text, e.data.current, e.data.total);
-    } else if (e.data.type === "complete") {
-      hideStatusBar();
-      const data = e.data.data;
-      console.log("Worker result:", data);
+    const { type, text, current, total, data, message } = e.data;
 
-      if (typeof renderDiagram === "function") {
-        renderDiagram(diagram, diagramView, data);
-      } else {
-        console.warn("[app.js] renderDiagram() not found.");
+    if (type === "progress") {
+      if (typeof appendStatusLine === "function") {
+        appendStatusLine(`[worker] ${text} (${current || 0}/${total || 0})`);
       }
+      updateStatusBar(text, current, total);
+      return;
+    }
 
-      const { entities, enumerations, services, customFunctions } = data;
-      const msg = [
-        `Parsed ${entities.length} entities`,
-        `${Object.keys(enumerations).length} enums`,
-        `${services.length} services`,
-        `${customFunctions?.length || 0} functions`
-      ].join(", ");
-      console.log("✅", msg);
-    } else if (e.data.type === "error") {
+    if (type === "complete") {
+      if (typeof appendStatusLine === "function") {
+        appendStatusLine("[worker] ✅ Parsing complete.");
+      }
       hideStatusBar();
-      console.error("❌ Worker error:", e.data.message);
+
+      if (data && typeof renderDiagram === "function") {
+        renderDiagram(diagram, diagramView, data);
+      }
+      return;
+    }
+
+    if (type === "error") {
+      if (typeof appendStatusLine === "function") {
+        appendStatusLine(`[worker] ❌ ${message}`);
+      }
+      hideStatusBar();
+      return;
+    }
+
+    if (typeof appendStatusLine === "function") {
+      appendStatusLine(`[worker] ${JSON.stringify(e.data)}`);
     }
   };
+
   worker.onerror = (err) => {
     console.error("❌ Worker script error:", err.message);
     hideStatusBar();
   };
+
   worker.postMessage({ fileData: await file.arrayBuffer() });
 }
 

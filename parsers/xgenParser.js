@@ -11,10 +11,11 @@ self.parseXgenAttributes = async function (zip) {
       if (!folder) return;
 
       // Find all .xgen files (except .ref.xgen)
-      const files = folder.file(/\.xgen$/i) || [];
-      for (const file of files) {
-        const lower = file.name?.toLowerCase?.() ?? "";
-        if (lower.endsWith(".ref.xgen")) continue;
+      // Find all .xgen files (skip legacy .js.xgen and .ref.xgen)
+const files = folder.file(/\.xgen$/i) || [];
+for (const file of files) {
+  const lower = file.name?.toLowerCase?.() ?? "";
+  if (lower.endsWith(".ref.xgen") || lower.endsWith(".js.xgen")) continue;
 
         const xmlText = await file.async("text");
         processXgenFile(xmlText, file.name, result);
@@ -50,68 +51,80 @@ self.parseXgenAttributes = async function (zip) {
 };
 
 // --- Helper: Parse a single .xgen XML file and extract attributes ---
+// --- Helper: Parse a single .xgen XML file and extract attributes ---
 function processXgenFile(xmlText, fileName, result) {
   try {
-    const xml = parseXmlString(xmlText);
-    if (!xml) return;
+    if (!xmlText || !xmlText.trim()) return;
 
-    // Try to determine entity name for this file
-    let entityName = null;
+    let xml;
+    try {
+      xml = parseXmlString(xmlText);
+    } catch (err) {
+      console.warn(`[xgenParser] Malformed or unreadable XGEN file skipped: ${fileName}`);
+      return;
+    }
+    if (!xml || !xml.documentElement) return;
 
-    // 1️⃣ Look for explicit <entity> tag
+    // Find all <entity> elements under <entities>
     const entityNodes = xml.getElementsByTagName("entity");
-    if (entityNodes && entityNodes.length > 0) {
-      const firstEntity = entityNodes[0];
-      entityName =
-        firstEntity.getAttribute("name") ||
-        firstEntity.getAttribute("id") ||
-        firstEntity.getAttribute("ref");
-    }
-
-    // 2️⃣ Fallback to global if not found
-    if (!entityName || entityName === "UnknownEntity") {
-      entityName = "global";
-    }
-
-    // Collect attributes
-    const attrNodes = xml.getElementsByTagName("attribute");
-    if (!attrNodes || attrNodes.length === 0) {
-      console.warn(`[xgenParser] No <attribute> nodes in ${fileName}`);
+    if (!entityNodes || entityNodes.length === 0) {
+      console.warn(`[xgenParser] No <entity> nodes in ${fileName}`);
       return;
     }
 
-    const attrs = [];
-    for (let i = 0; i < attrNodes.length; i++) {
-      const node = attrNodes[i];
-      const baseText =
-        node.getElementsByTagName("base")?.[0]?.textContent?.trim() ?? "";
-      if (!baseText) continue;
+    // Iterate through every <entity> block
+    for (let i = 0; i < entityNodes.length; i++) {
+      const eNode = entityNodes[i];
 
-      const id = node.getAttribute("name") ?? "";
-      const type = node.getAttribute("type") ?? "text";
+      const refVal  = eNode.getAttribute ? eNode.getAttribute("ref")  : "";
+      const nameVal = eNode.getAttribute ? eNode.getAttribute("name") : "";
+      const idVal   = eNode.getAttribute ? eNode.getAttribute("id")   : "";
 
-      const attr = {
-        id,
-        type,
-        baseText,
-        publicName: "no public name",
-        isDocumentAttribute: true,
-      };
+      // Determine correct entity target
+      let entityName = null;
+      if (refVal && refVal.trim() === "global") {
+        entityName = "global";
+      } else if (nameVal && nameVal.trim()) {
+        entityName = nameVal.trim();
+      } else if (idVal && idVal.trim()) {
+        entityName = idVal.trim();
+      } else {
+        continue; // ignore anonymous entities
+      }
 
-      attrs.push(attr);
-    }
+      // Collect only this entity's own <attribute> children
+      const attributes = [];
+      const attrNodes = eNode.getElementsByTagName("attribute");
+      for (let j = 0; j < attrNodes.length; j++) {
+        const aNode = attrNodes[j];
+        const base =
+          aNode.getElementsByTagName("base")?.[0]?.textContent?.trim() ||
+          aNode.getAttribute("name") ||
+          "";
+        if (!base) continue;
 
-    if (attrs.length > 0) {
-      if (!result.has(entityName)) result.set(entityName, []);
-      result.get(entityName).push(...attrs);
-      console.log(
-        `[xgenParser] Parsed ${attrs.length} attributes for entity "${entityName}"`
-      );
+        attributes.push({
+          id: aNode.getAttribute("name") || "",
+          type: aNode.getAttribute("type") || "text",
+          baseText: base.trim(),
+          publicName: "no public name",
+          isDocumentAttribute: true
+        });
+      }
+
+      if (attributes.length > 0) {
+        if (!result.has(entityName)) result.set(entityName, []);
+        result.get(entityName).push(...attributes);
+        console.log(
+          `[xgenParser] Parsed ${attributes.length} attributes for entity "${entityName}" (${fileName})`
+        );
+      }
     }
   } catch (err) {
-    console.warn("[xgenParser] Failed to parse XGEN file:", err);
+    console.warn("[xgenParser] Failed to parse XGEN file:", fileName, err);
   }
 }
+
 
 // --- Helper (unchanged): Walk up the tree to find nearest <entity> ancestor ---
 function findAncestorEntity(node) {

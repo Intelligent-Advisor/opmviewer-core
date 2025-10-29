@@ -2,13 +2,13 @@
 // Combines OPM, ENUM, REF, and XGEN parsing, merges document attributes, and returns data for rendering.
 
 importScripts(
-  "libs/jszip.min.js",
-  "libs/fast-xml-parser.js",
-  "parsers/xml.js",
-  "parsers/opmParser.js",
-  "parsers/enumParser.js",
-  "parsers/refParser.js",
-  "parsers/xgenParser.js"
+  "./libs/jszip.min.js",
+  "./libs/fast-xml-parser.js",
+  "./parsers/xml.js",
+  "./parsers/opmParser.js",
+  "./parsers/enumParser.js",
+  "./parsers/refParser.js",
+  "./parsers/xgenParser.js"
 );
 
 self.onmessage = async (e) => {
@@ -80,74 +80,71 @@ self.onmessage = async (e) => {
       });
     }
 
-    // --- Parse XGEN files (/bin/ document attributes) ---
-    try {
-      const xgenAttributes = await parseXgenAttributes(zip);
-      const entityNames = [...xgenAttributes.keys()];
-      console.log(`[worker] XGEN parsed for ${entityNames.length} entities:`, entityNames);
+// --- Parse XGEN files (/bin/ document attributes) ---
+try {
+  const xgenAttributes = await parseXgenAttributes(zip);
+  const entityNames = [...xgenAttributes.keys()];
+  console.log(`[worker] XGEN parsed for ${entityNames.length} entities:`, entityNames);
 
-      let mergedCount = 0;
+  let mergedCount = 0;
 
-      for (const [entityName, attrs] of xgenAttributes.entries()) {
-        console.log(`[worker] 🔍 Processing XGEN entity "${entityName}" with ${attrs.length} attributes`);
+  // --- Merge each XGEN entity or global section ---
+  for (const [entityName, attrs] of xgenAttributes.entries()) {
+    console.log(`[worker] 🔍 Processing XGEN entity "${entityName}" with ${attrs.length} attributes`);
 
-        const entity = result.entities.find(
-          (e) =>
-            e.name?.trim().toLowerCase() === entityName.trim().toLowerCase() ||
-            e.id?.trim().toLowerCase() === entityName.trim().toLowerCase()
-        );
+    // Find exact case-sensitive match in OPM entities
+    const target = result.entities.find(
+      (e) => e.name?.trim() === entityName.trim()
+    );
 
-        if (!entity) {
-          console.warn(`[worker] ⚠️ No matching OPM entity found for "${entityName}"`);
-          continue;
-        }
+    if (!target) {
+      console.warn(`[worker] ⚠️ No matching OPM entity found for "${entityName}"`);
+      continue;
+    }
 
-        console.log(`[worker] ✅ Found matching OPM entity: "${entity.name}" (${entity.attributes?.length || 0} existing attributes)`);
+    if (!target.attributes) target.attributes = [];
 
-        if (!entity.attributes) entity.attributes = [];
+    const existingBaseTexts = new Set(
+      target.attributes.map((a) => a.baseText?.trim()).filter(Boolean)
+    );
 
-        const existingBaseTexts = new Set(
-          entity.attributes
-            .map((a) => a.baseText?.trim())
-            .filter((t) => !!t)
-        );
+    for (const xAttr of attrs) {
+      const baseText = xAttr.baseText?.trim();
+      if (!baseText) continue;
 
-        for (const xAttr of attrs) {
-          const baseText = xAttr.baseText?.trim();
-          if (!baseText) {
-            console.warn(`[worker] ⚠️ XGEN attribute missing baseText, skipping:`, xAttr);
-            continue;
-          }
-
-          if (existingBaseTexts.has(baseText)) {
-            console.log(`[worker] ⏩ Skipping duplicate attribute: "${baseText}"`);
-            continue;
-          }
-
-          console.log(`[worker] ➕ Adding new XGEN attribute: "${baseText}" to "${entity.name}"`);
-
-          // Mark new XGEN-only attribute
-          xAttr.isDocumentAttribute = true;
-          if (!xAttr.type) xAttr.type = "text";
-          if (!xAttr.publicName) xAttr.publicName = "No Public Name";
-
-          entity.attributes.push(xAttr);
-          existingBaseTexts.add(baseText);
-          mergedCount++;
-        }
+      // Skip if already present (case-sensitive)
+      if (existingBaseTexts.has(baseText)) {
+        console.log(`[worker] ⏩ Skipping duplicate attribute "${baseText}" in "${entityName}"`);
+        continue;
       }
 
-      console.log(`[worker] ✅ XGEN merge complete — added ${mergedCount} new attributes.`);
-      processed++;
-      postMessage({
-        type: "progress",
-        text: "Merged XGEN document attributes",
-        current: processed,
-        total,
-      });
-    } catch (err) {
-      console.warn("[worker.js] ❌ XGEN parsing failed:", err);
+      // Add new XGEN-only attribute
+      const newAttr = {
+        ...xAttr,
+        isDocumentAttribute: true,
+        type: xAttr.type || "text",
+        publicName: xAttr.publicName || "No Public Name",
+      };
+
+      target.attributes.push(newAttr);
+      existingBaseTexts.add(baseText);
+      mergedCount++;
+      console.log(`[worker] ➕ Added "${baseText}" to "${target.name}"`);
     }
+  }
+
+  console.log(`[worker] ✅ XGEN merge complete — added ${mergedCount} new attributes.`);
+  processed++;
+  postMessage({
+    type: "progress",
+    text: "Merged XGEN document attributes",
+    current: processed,
+    total,
+  });
+} catch (err) {
+  console.warn("[worker.js] ❌ XGEN parsing failed:", err);
+}
+
 
     // --- Done ---
     postMessage({ type: "complete", data: result });

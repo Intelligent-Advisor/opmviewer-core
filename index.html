@@ -19,7 +19,6 @@
       }
 
       #canvasContainer {
-      
         margin: 0 auto;
         background: #fff;
         border: 0px solid #ccc;
@@ -77,8 +76,7 @@
       /* Wrapper for diagram + zoom */
       #canvasWrapper {
         position: relative;
-        width: 1750px;
-        height: 740px;
+       
         margin: 0 auto;
         background: #fff;
         border: 1px solid #ccc;
@@ -132,9 +130,7 @@
   </head>
 
   <body>
-    <h1 style="text-align: center; color: #3c64a0">
-      Oracle Policy Modeling Project Viewer - JavaScript Version
-    </h1>
+
 
     <div class="toolbar-container">
       <div class="toolbar">
@@ -158,14 +154,7 @@
   </select>
   <button id="applyLayoutBtn" style="margin-left:8px;padding:6px 12px;">Apply</button>
 
-  <label for="pdfPageSize" style="margin-right: 8px;">PDF Size:</label>
-  <select id="pdfPageSize" style="padding:6px; border-radius:6px;">
-    <option value="a4" selected>A4</option>
-    <option value="a3">A3</option>
-    <option value="a2">A2</option>
-    <option value="a1">A1</option>
-    <option value="a0">A0</option>
-  </select>
+  
   <button id="exportPdfBtn" style="margin-left:8px;padding:6px 12px;">Download PDF</button>
 </div>
    </div>
@@ -178,6 +167,33 @@
         <div id="statusBar"><div id="statusFill"></div></div>
       </div>
     </div>
+<!-- Debug / Status Console -->
+<div id="statusConsole" style="
+  background: #1a1a1a;
+  color: #b9d6ff;
+  font-family: Consolas, monospace;
+  font-size: 13px;
+  border-top: 1px solid #333;
+  height: 120px;
+  overflow-y: auto;
+  padding: 6px 8px;
+  white-space: pre-wrap;
+">
+  <div style="margin-bottom:4px;">
+    <button id="clearConsoleBtn" style="
+      float:right;
+      background:#333;
+      color:#b9d6ff;
+      border:1px solid #555;
+      border-radius:4px;
+      font-size:12px;
+      padding:2px 6px;
+      cursor:pointer;
+    ">Clear</button>
+    <strong>Console</strong>
+  </div>
+  <div id="consoleContent"></div>
+</div>
 
     <div class="footer" style="text-align: center; margin-top: 20px">
       <a id="mindfusionLink" href="https://mindfusion.dev/">MindFusion</a>
