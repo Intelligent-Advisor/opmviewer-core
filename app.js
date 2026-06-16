@@ -61,8 +61,8 @@ document.addEventListener("DOMContentLoaded", function () {
     diagram.resizeToFitItems(20, false, true);
   }
 
-  window.addEventListener("resize", resizeDiagramCanvas);
-  resizeDiagramCanvas();
+ // window.addEventListener("resize", resizeDiagramCanvas);
+  //resizeDiagramCanvas();
 
   // === Zoom Control ===
   const zoomCanvas = document.getElementById("zoomCanvas");
@@ -134,14 +134,24 @@ document.addEventListener("DOMContentLoaded", function () {
         // --- Ensure the diagram fits all items ---
         diagram.resizeToFitItems(20, false, true);
 
-        const wrapper = document.getElementById("canvasWrapper");
-        const mywidth = wrapper.offsetWidth;
-        const myheight = wrapper.offsetHeight;
+        const contentBounds = diagram.getContentBounds();
+        const printPadding = 16;
+        const printArea = new MindFusion.Drawing.Rect(
+          contentBounds.x - printPadding,
+          contentBounds.y - printPadding,
+          contentBounds.width + printPadding * 2,
+          contentBounds.height + printPadding * 2
+        );
+        const pageSize = {
+          width: Math.max(1, Math.ceil(printArea.width)),
+          height: Math.max(1, Math.ceil(printArea.height))
+        };
 
         // --- Use MindFusion's built-in print (full diagram) ---
         diagramView.print({
-          printArea: diagram.getContentBounds(),
-          pageSize: { width: mywidth, height: myheight },
+          printArea: printArea,
+          pageSize: pageSize,
+          margin: 0,
           scaleMode: "FitToPage",
           background: true,
           title: "OPM Viewer Export"

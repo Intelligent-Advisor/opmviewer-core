@@ -73,7 +73,7 @@ window.renderDiagram = function (diagram, diagramView, data) {
         if (attr.isDocumentAttribute === true) {
           [c0, c1, c2].forEach((cell) => {
             if (cell) {
-              cell.font = new Drawing.Font("Arial", 3, false, false, true, false);
+              cell.font = new Drawing.Font("Arial", 4, false, true, false, false);
             }
           });
         }
