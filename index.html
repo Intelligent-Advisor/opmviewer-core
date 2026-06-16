@@ -15,7 +15,8 @@
         min-height: 100vh;
         padding: 2rem;
         margin: 0;
-        overflow: hidden;
+        overflow-x: hidden;
+        overflow-y: auto;
       }
 
       #canvasContainer {
@@ -77,12 +78,16 @@
       #canvasWrapper {
         position: relative;
         margin: 0 auto;
+        width: min(100%, 1848px);
         background: #fff;
         border: 1px solid #ccc;
         border-radius: 8px;
         box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1);
         overflow: hidden;
-        height : 500px;
+        min-height: 420px;
+        height: 62vh;
+        max-height: 80vh;
+        resize: vertical;
       }
 
       /* Zoom control canvas (docked top-right) */

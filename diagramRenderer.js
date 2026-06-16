@@ -163,7 +163,12 @@ window.renderDiagram = function (diagram, diagramView, data) {
       const tgt = entityMap.get(rel.target);
       if (src && tgt) {
         const link = diagram.factory.createDiagramLink(src, tgt);
-        link.text = rel.text || rel.type || "";
+        const relName = (rel.text || "").trim();
+        const relType = (rel.type || "").trim();
+        link.text =
+          relName && relType
+            ? `${relName} (${relType})`
+            : relName || relType || "";
         link.pen = "#666"; link.textBrush = "#444";
       }
     });
@@ -206,8 +211,13 @@ window.renderDiagram = function (diagram, diagramView, data) {
         const srcNode = entityMap.get(entity.id) || entityMap.get(entity.name);
         const tgtNode = entityMap.get(attr.enumRef);
         if (srcNode && tgtNode) {
+          const enumName =
+            (enumerations?.[attr.enumRef]?.name || tgtNode.text || attr.enumRef || "").trim();
+          const attrText =
+            (attr.baseText || attr.publicName || attr.type || "attribute").trim();
           const link = diagram.factory.createDiagramLink(srcNode, tgtNode);
           link.text = "uses enum";
+          link.tooltip = `${attrText} uses enum ${enumName}`;
           link.pen = "#b48b48";
           link.textBrush = "#b48b48";
         }

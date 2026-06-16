@@ -39,30 +39,27 @@ document.addEventListener("DOMContentLoaded", function () {
   // --- Dynamic crisp resizing (no CSS stretch) ---
   function resizeDiagramCanvas() {
     const zoomWidth = 100; // reserve horizontal space for zoom control
-    const consoleHeight = 120; // reserve vertical space for debug console
     const deviceRatio = window.devicePixelRatio || 1;
 
     const wrapper = document.getElementById("canvasWrapper");
-    const wrapperRect = wrapper.getBoundingClientRect();
-
-    const newWidth = wrapperRect.width - zoomWidth;
-    const newHeight = window.innerHeight - consoleHeight - wrapperRect.top - 20;
+    const newWidth = Math.max(320, wrapper.clientWidth - zoomWidth);
+    const newHeight = Math.max(320, wrapper.clientHeight);
 
     // Set both internal buffer size and CSS size (avoid blur)
     canvas.width = newWidth * deviceRatio;
     canvas.height = newHeight * deviceRatio;
     canvas.style.width = newWidth + "px";
     canvas.style.height = newHeight + "px";
-
-    // Keep zoom proportional on HiDPI screens
-    diagramView.zoomFactor = 100 * deviceRatio;
-
-    // Redraw / arrange as needed
-    diagram.resizeToFitItems(20, false, true);
+    diagram.repaint();
   }
 
- // window.addEventListener("resize", resizeDiagramCanvas);
-  //resizeDiagramCanvas();
+  window.addEventListener("resize", resizeDiagramCanvas);
+  if (typeof ResizeObserver !== "undefined") {
+    const wrapper = document.getElementById("canvasWrapper");
+    const resizeObserver = new ResizeObserver(() => resizeDiagramCanvas());
+    resizeObserver.observe(wrapper);
+  }
+  resizeDiagramCanvas();
 
   // === Zoom Control ===
   const zoomCanvas = document.getElementById("zoomCanvas");
