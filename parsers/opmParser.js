@@ -14,14 +14,17 @@ self.parseOpmDataModel = function (xmlText) {
   const entityNodes = xml.getElementsByTagName("entity");
   for (let i = 0; i < entityNodes.length; i++) {
     const eNode = entityNodes[i];
+    const entityRef = eNode.getAttribute("ref") || "";
+    const isGlobalEntity = entityRef === "global";
     const entity = {
       id:
         eNode.getAttribute("id") ||
-        eNode.getAttribute("ref") || // handle <entity ref="global">
+        entityRef || // handle <entity ref="global">
         `ent${i}`,
       name:
+        (isGlobalEntity ? "global" : "") ||
         eNode.getAttribute("name") ||
-        eNode.getAttribute("ref") ||
+        entityRef ||
         `Entity ${i + 1}`,
       attributes: [],
     };

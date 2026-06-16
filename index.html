@@ -74,6 +74,10 @@
         color: #444;
       }
 
+      .toolbar button {
+        cursor: pointer;
+      }
+
       /* Wrapper for diagram + zoom */
       #canvasWrapper {
         position: relative;
@@ -88,6 +92,16 @@
         height: 62vh;
         max-height: 80vh;
         resize: vertical;
+      }
+
+      #diagramTitle {
+        width: min(100%, 1848px);
+        margin: 0 auto 0.75rem auto;
+        text-align: center;
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #2a2a2a;
+        min-height: 1.5rem;
       }
 
       /* Zoom control canvas (docked top-right) */
@@ -131,6 +145,84 @@
         border-radius: 4px;
         transition: width 0.3s;
       }
+
+      #legendOverlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(20, 24, 32, 0.45);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        padding: 1.5rem;
+      }
+
+      #legendOverlay.open {
+        display: flex;
+      }
+
+      #legendDialog {
+        width: min(560px, 100%);
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22);
+        border: 1px solid #d8d4cf;
+        overflow: hidden;
+      }
+
+      #legendHeader {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 18px;
+        background: #f4efe8;
+        border-bottom: 1px solid #ddd5cc;
+      }
+
+      #legendHeader h2 {
+        margin: 0;
+        font-size: 1rem;
+        color: #2a2a2a;
+      }
+
+      #legendCloseBtn {
+        border: 1px solid #b8afa4;
+        background: #fff;
+        color: #444;
+        border-radius: 6px;
+        padding: 4px 10px;
+      }
+
+      #legendBody {
+        padding: 18px;
+        color: #333;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      .legend-grid {
+        display: grid;
+        grid-template-columns: 26px 1fr;
+        gap: 10px 12px;
+        align-items: center;
+        margin: 12px 0 18px 0;
+      }
+
+      .legend-swatch {
+        width: 22px;
+        height: 22px;
+        border-radius: 5px;
+        border: 1px solid rgba(0, 0, 0, 0.2);
+      }
+
+      .legend-links {
+        margin: 0;
+        padding-left: 18px;
+      }
+
+      .legend-links li + li {
+        margin-top: 6px;
+      }
     </style>
   </head>
 
@@ -161,8 +253,10 @@
 
   
   <button id="exportPdfBtn" style="margin-left:8px;padding:6px 12px;">Download PDF</button>
+  <button id="legendBtn" style="margin-left:8px;padding:6px 12px;">Legend</button>
 </div>
    </div>
+    <div id="diagramTitle"></div>
     <div id="canvasWrapper">
       <canvas id="canvasContainer"></canvas>
       <canvas id="zoomCanvas"></canvas>
@@ -199,6 +293,34 @@
   </div>
   <div id="consoleContent"></div>
 </div>
+
+    <div id="legendOverlay" aria-hidden="true">
+      <div id="legendDialog" role="dialog" aria-modal="true" aria-labelledby="legendTitle">
+        <div id="legendHeader">
+          <h2 id="legendTitle">Diagram Legend</h2>
+          <button id="legendCloseBtn" type="button">Close</button>
+        </div>
+        <div id="legendBody">
+          <div class="legend-grid">
+            <div class="legend-swatch" style="background:#ffffff;"></div>
+            <div><strong>Entity</strong>: standard OPM entity or data model table.</div>
+            <div class="legend-swatch" style="background:#eef7f5;"></div>
+            <div><strong>Function</strong>: entity associated with a custom function.</div>
+            <div class="legend-swatch" style="background:#f9f5ef;"></div>
+            <div><strong>Enumeration</strong>: enum values referenced by attributes.</div>
+            <div class="legend-swatch" style="background:#fff3d6;"></div>
+            <div><strong>Nested Enumeration</strong>: enum that references a child enum.</div>
+            <div class="legend-swatch" style="background:#edf1fc;"></div>
+            <div><strong>Decision Service</strong>: `.ref` decision service input/output schema.</div>
+          </div>
+          <ul class="legend-links">
+            <li><strong>Gray links</strong>: standard relationships. Labels may include relationship cardinality such as `OneToMany`.</li>
+            <li><strong>Blue links</strong>: decision service uses or produces an entity.</li>
+            <li><strong>Gold links</strong>: an entity attribute uses an enumeration. Hover the link for attribute and enum details.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
 
     <div class="footer" style="text-align: center; margin-top: 20px">
       <a id="mindfusionLink" href="https://mindfusion.dev/">MindFusion</a>

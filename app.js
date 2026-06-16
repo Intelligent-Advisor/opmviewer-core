@@ -39,15 +39,14 @@ document.addEventListener("DOMContentLoaded", function () {
   // --- Dynamic crisp resizing (no CSS stretch) ---
   function resizeDiagramCanvas() {
     const zoomWidth = 100; // reserve horizontal space for zoom control
-    const deviceRatio = window.devicePixelRatio || 1;
 
     const wrapper = document.getElementById("canvasWrapper");
     const newWidth = Math.max(320, wrapper.clientWidth - zoomWidth);
     const newHeight = Math.max(320, wrapper.clientHeight);
 
-    // Set both internal buffer size and CSS size (avoid blur)
-    canvas.width = newWidth * deviceRatio;
-    canvas.height = newHeight * deviceRatio;
+    // Keep the backing store in CSS pixels and let MindFusion render at that size.
+    canvas.width = newWidth;
+    canvas.height = newHeight;
     canvas.style.width = newWidth + "px";
     canvas.style.height = newHeight + "px";
     diagram.repaint();
@@ -83,11 +82,15 @@ document.addEventListener("DOMContentLoaded", function () {
   // === File Upload ===
   const fileInput = document.getElementById("fileInput");
   const fileNameSpan = document.getElementById("fileName");
+  const diagramTitle = document.getElementById("diagramTitle");
 
   fileInput.addEventListener("change", async (event) => {
     const file = event.target.files[0];
     if (!file) return;
     fileNameSpan.textContent = file.name;
+    if (diagramTitle) {
+      diagramTitle.textContent = file.name;
+    }
 
     if (file.name.toLowerCase().endsWith(".zip")) {
       await handleZipFile(file);
@@ -99,6 +102,9 @@ document.addEventListener("DOMContentLoaded", function () {
   // === Layout Selector ===
   const layoutSelect = document.getElementById("layoutSelect");
   const applyLayoutBtn = document.getElementById("applyLayoutBtn");
+  const legendBtn = document.getElementById("legendBtn");
+  const legendOverlay = document.getElementById("legendOverlay");
+  const legendCloseBtn = document.getElementById("legendCloseBtn");
 
   if (layoutSelect && applyLayoutBtn) {
     applyLayoutBtn.addEventListener("click", () => {
@@ -121,6 +127,41 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     });
   }
+
+  // === Legend Popup ===
+  function openLegend() {
+    if (!legendOverlay) return;
+    legendOverlay.classList.add("open");
+    legendOverlay.setAttribute("aria-hidden", "false");
+  }
+
+  function closeLegend() {
+    if (!legendOverlay) return;
+    legendOverlay.classList.remove("open");
+    legendOverlay.setAttribute("aria-hidden", "true");
+  }
+
+  if (legendBtn) {
+    legendBtn.addEventListener("click", openLegend);
+  }
+
+  if (legendCloseBtn) {
+    legendCloseBtn.addEventListener("click", closeLegend);
+  }
+
+  if (legendOverlay) {
+    legendOverlay.addEventListener("click", (event) => {
+      if (event.target === legendOverlay) {
+        closeLegend();
+      }
+    });
+  }
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeLegend();
+    }
+  });
 
   // === PDF Export (print full diagram) ===
   const exportPdfBtn = document.getElementById("exportPdfBtn");

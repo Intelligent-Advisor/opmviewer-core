@@ -11,9 +11,17 @@ window.renderDiagram = function (diagram, diagramView, data) {
 
   const { Diagramming, Drawing, Graphs } = MindFusion;
   const TableNode = Diagramming.TableNode;
+  const SHORT_LABEL_LIMIT = 28;
+
+  function shortenLabel(text, maxLength = SHORT_LABEL_LIMIT) {
+    const value = (text || "").trim();
+    if (value.length <= maxLength) return value;
+    return `${value.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+  }
 
   diagram.clearAll();
   const entityMap = new Map();
+  const pendingServiceLinks = [];
 
   // === ENTITIES / FUNCTIONS / ENUMS ===
   entities.forEach((entity, i) => {
@@ -125,37 +133,6 @@ window.renderDiagram = function (diagram, diagramView, data) {
     });
   }
 
-  // === DECISION SERVICE (.ref) NODES ===
-  if (Array.isArray(services) && services.length > 0) {
-    services.forEach((svc, i) => {
-      const rows = svc.schemaRows || [];
-      const node = new TableNode(diagram);
-      node.bounds = new Drawing.Rect(0, 0, 480, 80);
-      node.text = svc.name || `Decision Service ${i + 1}`;
-      node.brush = "#edf1fc"; node.captionBackBrush = "#415db4";
-      node.shadowOffsetX = 2; node.shadowOffsetY = 2; node.shadowColor = "#aaa";
-
-      node.redimTable(3, Math.max(rows.length, 1) + 1);
-      const headers = ["Direction", "Item", "Details"];
-      for (let c = 0; c < 3; c++) {
-        const h = node.getCell(c, 0);
-        if (h) { h.text = headers[c]; h.brush = node.captionBackBrush; h.textColor = "#fff"; }
-      }
-
-      for (let r = 0; r < rows.length; r++) {
-        const row = rows[r];
-        const indent = row.item?.startsWith("(") ? "   " : "";
-        node.getCell(0, r + 1).text = row.direction || "";
-        node.getCell(1, r + 1).text = `${indent}${row.item || ""}`;
-        node.getCell(2, r + 1).text = row.details || "";
-      }
-
-      node.resizeToFitText(false, false);
-      diagram.addItem(node);
-      entityMap.set(svc.name, node);
-    });
-  }
-
   // === RELATIONSHIPS (standard) ===
   if (Array.isArray(relationships)) {
     relationships.forEach((rel) => {
@@ -165,10 +142,12 @@ window.renderDiagram = function (diagram, diagramView, data) {
         const link = diagram.factory.createDiagramLink(src, tgt);
         const relName = (rel.text || "").trim();
         const relType = (rel.type || "").trim();
-        link.text =
+        const fullLabel =
           relName && relType
             ? `${relName} (${relType})`
             : relName || relType || "";
+        link.text = shortenLabel(fullLabel);
+        link.tooltip = fullLabel;
         link.pen = "#666"; link.textBrush = "#444";
       }
     });
@@ -177,8 +156,6 @@ window.renderDiagram = function (diagram, diagramView, data) {
   // === AUTO-LINK Decision Services → Entities ===
   if (Array.isArray(services)) {
     services.forEach((svc) => {
-      const srcNode = entityMap.get(svc.name);
-      if (!srcNode) return;
       (svc.schemaRows || []).forEach((row) => {
         const opaName = row.details?.match(/\(([^)]+)\)/)?.[1]?.trim();
         if (!opaName) return;
@@ -191,14 +168,11 @@ window.renderDiagram = function (diagram, diagramView, data) {
           )
         );
         if (tgtEntity) {
-          const tgtNode =
-            entityMap.get(tgtEntity.id) || entityMap.get(tgtEntity.name);
-          if (tgtNode) {
-            const link = diagram.factory.createDiagramLink(srcNode, tgtNode);
-            link.text = row.direction === "Input" ? "uses" : "produces";
-            link.pen = "#4169e1";
-            link.textBrush = "#4169e1";
-          }
+          pendingServiceLinks.push({
+            serviceName: svc.name,
+            targetKey: tgtEntity.id || tgtEntity.name,
+            direction: row.direction === "Input" ? "uses" : "produces",
+          });
         }
       });
     });
@@ -247,6 +221,82 @@ window.renderDiagram = function (diagram, diagramView, data) {
   layout.levelDistance = 45;
   diagram.arrange(layout);
   diagram.resizeToFitItems(0, false, true);
+
+  // === DECISION SERVICE (.ref) NODES ===
+  if (Array.isArray(services) && services.length > 0) {
+    const contentBounds = diagram.getContentBounds();
+    const serviceColumnX = contentBounds.right() + 120;
+    let serviceY = contentBounds.y + 20;
+
+    services.forEach((svc, i) => {
+      const rows = svc.schemaRows || [];
+      const node = new TableNode(diagram);
+      node.bounds = new Drawing.Rect(serviceColumnX, serviceY, 720, 80);
+      node.text = svc.name || `Decision Service ${i + 1}`;
+      node.brush = "#edf1fc"; node.captionBackBrush = "#415db4";
+      node.shadowOffsetX = 2; node.shadowOffsetY = 2; node.shadowColor = "#aaa";
+
+      node.redimTable(3, Math.max(rows.length, 1) + 1);
+      const headers = ["Direction", "Item", "Details"];
+      for (let c = 0; c < 3; c++) {
+        const h = node.getCell(c, 0);
+        if (h) {
+          h.text = headers[c];
+          h.brush = node.captionBackBrush;
+          h.textColor = "#fff";
+          h.enableWrap = true;
+        }
+      }
+
+      for (let r = 0; r < rows.length; r++) {
+        const row = rows[r];
+        const indent = row.item?.startsWith("(") ? "   " : "";
+        const directionCell = node.getCell(0, r + 1);
+        const itemCell = node.getCell(1, r + 1);
+        const detailsCell = node.getCell(2, r + 1);
+
+        if (directionCell) {
+          directionCell.text = row.direction || "";
+          directionCell.maxWidth = 80;
+        }
+        if (itemCell) {
+          itemCell.text = `${indent}${row.item || ""}`;
+          itemCell.maxWidth = 250;
+          itemCell.enableWrap = true;
+        }
+        if (detailsCell) {
+          detailsCell.text = row.details || "";
+          detailsCell.maxWidth = 320;
+          detailsCell.enableWrap = true;
+        }
+      }
+
+      node.resizeToFitText(false, false);
+      const sizedBounds = node.bounds;
+      node.bounds = new Drawing.Rect(
+        serviceColumnX,
+        serviceY,
+        sizedBounds.width,
+        sizedBounds.height
+      );
+      diagram.addItem(node);
+      entityMap.set(svc.name, node);
+      serviceY += sizedBounds.height + 40;
+    });
+
+    pendingServiceLinks.forEach((svcLink) => {
+      const srcNode = entityMap.get(svcLink.serviceName);
+      const tgtNode = entityMap.get(svcLink.targetKey);
+      if (srcNode && tgtNode) {
+        const link = diagram.factory.createDiagramLink(srcNode, tgtNode);
+        link.text = svcLink.direction;
+        link.pen = "#4169e1";
+        link.textBrush = "#4169e1";
+      }
+    });
+
+    diagram.resizeToFitItems(0, false, true);
+  }
 
   console.log(
     `[diagramRenderer] Rendered ${entities.length} entities, ${Object.keys(enumerations || {}).length} enums, ${(services || []).length} services.`
